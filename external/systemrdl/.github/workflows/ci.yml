@@ -1,0 +1,357 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+            antlr4_setup: |
+              sudo apt-get update
+              sudo apt-get install -y curl uuid-dev
+          - os: macos-latest
+            cc: clang
+            cxx: clang++
+            antlr4_setup: |
+              brew install curl ossp-uuid
+          - os: windows-latest
+            cc: gcc
+            cxx: g++
+            msys: mingw64
+            antlr4_setup: |
+              # MSYS2 packages will be installed via msys2/setup-msys2 action
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Setup MSYS2 (Windows only)
+      if: matrix.os == 'windows-latest'
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: ${{ matrix.msys }}
+        update: true
+        install: >-
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-curl
+          mingw-w64-x86_64-python
+          mingw-w64-x86_64-python-pip
+
+    - name: Setup Python - Non-Windows
+      if: matrix.os != 'windows-latest'
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.9'
+
+    - name: Install Python dependencies - Non-Windows
+      if: matrix.os != 'windows-latest'
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Install Python dependencies - Windows MSYS2
+      if: matrix.os == 'windows-latest'
+      shell: msys2 {0}
+      run: |
+        python -m pip install --upgrade pip --break-system-packages
+        pip install -r requirements.txt --break-system-packages
+
+    - name: Install system dependencies - Non-Windows
+      if: matrix.os != 'windows-latest'
+      run: ${{ matrix.antlr4_setup }}
+
+    - name: Configure CMake - Non-Windows
+      if: matrix.os != 'windows-latest'
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_ANTLR4=OFF
+
+    - name: Configure CMake - Windows MSYS2
+      if: matrix.os == 'windows-latest'
+      shell: msys2 {0}
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_ANTLR4=OFF -G "Ninja"
+
+    - name: Build - Non-Windows
+      if: matrix.os != 'windows-latest'
+      run: |
+        cmake --build build --config Release --parallel 4
+
+    - name: Build - Windows MSYS2
+      if: matrix.os == 'windows-latest'
+      shell: msys2 {0}
+      run: |
+        cmake --build build --config Release --parallel 4
+
+    - name: Basic functionality test - Non-Windows
+      if: matrix.os != 'windows-latest'
+      run: |
+        # Test parser
+        ./build/systemrdl_parser --help
+        # Test elaborator
+        ./build/systemrdl_elaborator --help
+        # Test CSV2RDL converter
+        ./build/systemrdl_csv2rdl --help
+        # Test with a simple SystemRDL file (use existing known-good test)
+        ./build/systemrdl_elaborator test/test_minimal.rdl --json build/test_output.json
+        cat build/test_output.json
+        # Test CSV converter with basic example
+        ./build/systemrdl_csv2rdl test/test_csv_basic_example.csv -o build/test_csv_output.rdl
+        # Validate generated SystemRDL file
+        ./build/systemrdl_parser build/test_csv_output.rdl
+        # Test example application (library integration test)
+        echo "Running example application..."
+        ./build/example
+        echo "[OK] Example application completed successfully"
+
+    - name: Basic functionality test - Windows MSYS2
+      if: matrix.os == 'windows-latest'
+      shell: msys2 {0}
+      run: |
+        # Fix ANTLR4 DLL dependency issue
+        echo "=== Copying ANTLR4 runtime DLL ==="
+        if [ -f "build/_deps/antlr4_runtime-build/runtime/libantlr4-runtime.dll" ]; then
+          cp build/_deps/antlr4_runtime-build/runtime/libantlr4-runtime.dll build/
+          echo "[OK] ANTLR4 DLL copied successfully"
+        else
+          echo "[ERR] ANTLR4 DLL not found in expected location"
+          find build/_deps -name "*antlr*.dll" -type f
+        fi
+
+        # Test parser
+        echo "=== Testing systemrdl_parser ==="
+        ./build/systemrdl_parser.exe --help
+        # Test elaborator
+        echo "=== Testing systemrdl_elaborator ==="
+        ./build/systemrdl_elaborator.exe --help
+        # Test CSV2RDL converter
+        echo "=== Testing systemrdl_csv2rdl ==="
+        ./build/systemrdl_csv2rdl.exe --help
+        # Test with a simple SystemRDL file (use existing known-good test)
+        echo "=== Testing elaborator with test file ==="
+        ./build/systemrdl_elaborator.exe test/test_minimal.rdl --json build/test_output.json
+        cat build/test_output.json
+        # Test CSV converter with basic example
+        echo "=== Testing CSV converter ==="
+        ./build/systemrdl_csv2rdl.exe test/test_csv_basic_example.csv -o build/test_csv_output.rdl
+        # Validate generated SystemRDL file
+        echo "=== Validating generated RDL file ==="
+        ./build/systemrdl_parser.exe build/test_csv_output.rdl
+        # Test example application (library integration test)
+        echo "=== Running example application ==="
+        echo "Running example application..."
+        ./build/example.exe
+        echo "[OK] Example application completed successfully"
+
+    - name: Run comparison tests (Ubuntu only)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        python script/compare_implementations.py
+
+    - name: Run validation tests
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        python script/ast_output_validator.py --test --parser ./build/systemrdl_parser --elaborator ./build/systemrdl_elaborator --rdl test/test_minimal.rdl
+        python script/json_output_validator.py --test --elaborator ./build/systemrdl_elaborator --rdl test/test_minimal.rdl
+        # Run CSV2RDL validation suite
+        python script/csv2rdl_validator.py
+
+    - name: Upload test artifacts
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-artifacts-${{ matrix.os }}
+        path: |
+          build/*.json
+          build/*.rdl
+          build/*.log
+          *.log
+
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Setup Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.9'
+
+    - name: Install analysis tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort
+        pip install -r requirements.txt
+        sudo apt-get update
+        sudo apt-get install -y cppcheck clang-format
+
+    - name: Python code formatting check
+      run: |
+        black --check --diff script/
+        isort --check-only --diff script/
+
+    - name: Python linting
+      run: |
+        flake8 script/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 script/ --count --exit-zero --max-line-length=127 --ignore=C901,W503,E226 --statistics
+
+    - name: C++ static analysis
+      run: |
+        # Run cppcheck and capture output
+        cppcheck --language=c++ \
+          --enable=warning,style,performance \
+          --suppressions-list=.cppcheck-suppressions \
+          elaborator.cpp elaborator_main.cpp parser_main.cpp csv2rdl_main.cpp example/example.cpp 2>&1 | tee cppcheck.log
+
+        # Check if there are any actual warnings or errors (not just information)
+        if grep -E "(warning|error|style):" cppcheck.log > /dev/null; then
+          echo "[ERR] cppcheck found issues:"
+          grep -E "(warning|error|style):" cppcheck.log
+          exit 1
+        else
+          echo "[OK] cppcheck passed - no warnings or errors found"
+        fi
+
+    - name: C++ code formatting check
+      run: |
+        clang-format --version
+        echo "Using .clang-format configuration:"
+        echo "-------------------------------------"
+        head -5 .clang-format
+        echo "-------------------------------------"
+        # Ensure we're in the project root directory
+        cd ${{ github.workspace }}
+        # Find all C++ source files and check formatting (including example directory)
+        find . -name "*.cpp" -o -name "*.h" | \
+          grep -E "\.(cpp|h)$" | \
+          grep -v SystemRDL | \
+          grep -v build | \
+          xargs clang-format --style=file:.clang-format --dry-run -Werror
+
+    - name: Markdown linting
+      run: |
+        # Check if pymarkdown is available (same logic as CMake)
+        if python -c "import pymarkdown" 2>/dev/null; then
+          echo "[OK] PyMarkdown available - running markdown linting..."
+          python -m pymarkdown --config .pymarkdown.json scan README.md CONTRIBUTING.md CONTRIBUTORS.md
+          echo "[OK] Markdown linting passed"
+        else
+          echo "[ERR] PyMarkdown not found! Please install it to lint Markdown files."
+          exit 1
+        fi
+
+  documentation:
+    name: Documentation Build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Setup Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.9'
+
+    - name: Install documentation tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Check README
+      run: |
+        # Check if README exists and has reasonable content
+        test -f README.md
+        test $(wc -l < README.md) -gt 50
+
+    - name: Markdown linting
+      run: |
+        # Check if pymarkdown is available (same logic as CMake)
+        if python -c "import pymarkdown" 2>/dev/null; then
+          echo "[OK] PyMarkdown available - running markdown linting..."
+          echo "Running markdown linting..."
+          # Lint main markdown files (same as CMake target)
+          python -m pymarkdown --config .pymarkdown.json scan README.md CONTRIBUTING.md CONTRIBUTORS.md
+          echo "[OK] Markdown linting completed successfully"
+        else
+          echo "[ERR] PyMarkdown not found! Please install it to lint Markdown files."
+          echo "   Install with: pip install pymarkdown"
+          echo "   Or use requirements.txt: pip install -r requirements.txt"
+          exit 1
+        fi
+
+    - name: Check documentation completeness
+      run: |
+        # Check if important documentation files exist
+        test -f LICENSE
+        # Check if all public headers have documentation
+        grep -q "^/\*\*" elaborator.h || echo "Warning: elaborator.h may need better documentation"
+
+  compatibility-test:
+    name: SystemRDL Compatibility Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Setup Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        sudo apt-get update
+        sudo apt-get install -y curl uuid-dev
+
+    - name: Build project
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_ANTLR4=OFF
+        cmake --build build --config Release --parallel 4
+
+    - name: Run comprehensive compatibility tests
+      run: |
+        echo "Running SystemRDL compatibility comparison..."
+        python script/compare_implementations.py
+        echo "Testing AST output validation..."
+        python script/ast_output_validator.py --test --parser ./build/systemrdl_parser --elaborator ./build/systemrdl_elaborator --rdl test/test_minimal.rdl
+        echo "Testing JSON output validation..."
+        python script/json_output_validator.py --test --elaborator ./build/systemrdl_elaborator --rdl test/test_minimal.rdl
+        echo "Testing CSV2RDL converter validation..."
+        python script/csv2rdl_validator.py
+
+    - name: Generate test report
+      run: |
+        echo "## Test Results Summary" > test_report.md
+        echo "- Build: [OK] Success" >> test_report.md
+        echo "- SystemRDL Compatibility: [OK] Verified" >> test_report.md
+        echo "- JSON Output Validation: [OK] Passed" >> test_report.md
+        echo "- CSV2RDL Converter Validation: [OK] Passed" >> test_report.md
+        echo "- Generated on: $(date)" >> test_report.md
+        cat test_report.md
+
+    - name: Upload compatibility report
+      uses: actions/upload-artifact@v4
+      with:
+        name: compatibility-report
+        path: |
+          test_report.md

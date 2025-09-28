@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [master]
+
+env:
+  CMAKE_BUILD_TYPE: Release
+  INSTALL_LOCATION: .local
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        build_static: [ON, OFF]
+        build_shared: [ON, OFF]
+        build_demo:   [ON, OFF]
+        toolchain:
+          [
+            {
+              name: "Ubuntu GCC (Qt6)",
+              cxx: "g++",
+              cc: "gcc",
+              packages: "libspdlog-dev libfmt-dev qt6-base-dev libglx-dev libgl1-mesa-dev",
+              os: ubuntu-latest,
+            }
+          ]
+        exclude:
+          - build_static: OFF
+            build_shared: OFF
+
+    continue-on-error: false
+    runs-on: ${{ matrix.toolchain.os }}
+    env:
+      CC: ${{ matrix.toolchain.cc }}
+      CXX: ${{ matrix.toolchain.cxx }}
+
+    name: "${{ matrix.toolchain.name }} (static: ${{matrix.build_static}}; shared: ${{ matrix.build_shared }}; demo: ${{ matrix.build_demo }})"
+    if: "!contains(github.event.head_commit.message, '[ci skip]')"
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: Install packages (via apt)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update
+          sudo apt install ${{ matrix.toolchain.packages }} -y
+
+      - name: Configure
+        run: cmake -Bbuild -GNinja -DQSCHEMATIC_BUILD_STATIC=${{ matrix.build_static }} -DQSCHEMATIC_BUILD_SHARED=${{ matrix.build_shared }} -DQSCHEMATIC_BUILD_DEMO=${{ matrix.build_demo }} -DQSCHEMATIC_DEPENDENCY_GPDS_DOWNLOAD=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run tests
+        run:  ctest --test-dir build --output-on-failure

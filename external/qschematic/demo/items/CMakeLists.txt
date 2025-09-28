@@ -1,0 +1,22 @@
+add_subdirectory(popup)
+add_subdirectory(widgets)
+
+target_sources(
+    ${TARGET}
+    PRIVATE
+        customitemfactory.cpp
+        customitemfactory.hpp
+        fancywire.cpp
+        fancywire.hpp
+        flowend.cpp
+        flowend.hpp
+        flowstart.cpp
+        flowstart.hpp
+        itemtypes.hpp
+        operation.cpp
+        operation.hpp
+        operationconnector.cpp
+        operationconnector.hpp
+        operationdemo1.cpp
+        operationdemo1.hpp
+)

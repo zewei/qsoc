@@ -1,0 +1,15 @@
+*.o
+*.user.*
+*.user
+*-Debug
+build-*
+build/*
+
+qschematic/*.a
+qschematic/*.dll
+
+# IDE stuff
+.vs
+.vscode
+.idea
+cmake-build-*

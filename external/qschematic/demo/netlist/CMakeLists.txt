@@ -1,0 +1,12 @@
+target_sources(
+    ${TARGET}
+    PRIVATE
+        model.cpp
+        model.hpp
+        viewer.cpp
+        viewer.hpp
+        view.cpp
+        view.hpp
+        widget.cpp
+        widget.hpp
+)

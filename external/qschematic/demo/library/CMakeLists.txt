@@ -1,0 +1,12 @@
+target_sources(
+    ${TARGET}
+    PRIVATE
+        iteminfo.hpp
+        model.cpp
+        model.hpp
+        model_item.hpp
+        view.cpp
+        view.hpp
+        widget.cpp
+        widget.hpp
+)
