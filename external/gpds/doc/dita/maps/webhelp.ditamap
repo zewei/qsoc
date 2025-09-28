@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map>
+    <title><ph keyref="projectname"/></title>
+
+    <topicmeta>
+        <author>Joel Bodenmann</author>
+    </topicmeta>
+
+    <mapref href="keydefs.ditamap" processing-role="resource-only"/>
+
+    <topicref collection-type="sequence" chunk="to-content">
+        <topicmeta>
+            <navtitle>Introduction</navtitle>
+            <shortdesc>An introduction to <ph keyref="projectname"/></shortdesc>
+        </topicmeta>
+
+        <topicref href="../topics/what.dita">
+            <topicmeta>
+                <navtitle>What?</navtitle>
+                <shortdesc>What is <ph keyref="projectname"/>?</shortdesc>
+            </topicmeta>
+        </topicref>
+
+        <topicref href="../topics/features.dita">
+            <topicmeta>
+                <navtitle>Features</navtitle>
+            </topicmeta>
+        </topicref>
+
+        <topicref href="../topics/why.dita">
+            <topicmeta>
+                <navtitle>Why?</navtitle>
+                <shortdesc>What makes <ph keyref="projectname"/> different from existing serializers?</shortdesc>
+            </topicmeta>
+        </topicref>
+    </topicref>
+    
+    <mapref href="building.ditamap"/>
+    <mapref href="integration.ditamap"/>
+    <mapref href="architecture.ditamap"/>
+    <mapref href="usage.ditamap"/>
+    <mapref href="archivers.ditamap"/>
+    <mapref href="reference.ditamap"/>
+
+</map>

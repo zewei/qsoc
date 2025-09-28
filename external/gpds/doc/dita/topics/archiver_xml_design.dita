@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="archiver_xml_design">
+    <title>Design</title>
+    <conbody>
+        <fig>
+            <image href="../../uml/exports/svg/documentation!archiver_xml_5.svg"/>
+        </fig>
+        <p>The XML archiver is powered by <xref href="https://github.com/leethomason/tinyxml2"
+                format="html" scope="external">TinyXML2</xref>.</p>
+    </conbody>
+</concept>

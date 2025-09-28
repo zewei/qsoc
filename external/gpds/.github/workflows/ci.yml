@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [master]
+
+env:
+  BUILD_TYPE: Release
+  INSTALL_LOCATION: .local
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        enable_xml: [ON, OFF]
+        enable_yaml: [ON, OFF]
+        toolchain:
+          [
+            {
+              name: "Ubuntu GCC",
+              cxx: "g++-14",
+              cc: "gcc-14",
+              packages: "gcc-14 g++-14",
+              os: ubuntu-latest,
+            }
+          ]
+
+    continue-on-error: false
+    runs-on: ${{ matrix.toolchain.os }}
+    env:
+      CC: ${{ matrix.toolchain.cc }}
+      CXX: ${{ matrix.toolchain.cxx }}
+
+    name: "${{ matrix.toolchain.name }} (XML: ${{ matrix.enable_xml }}) (YAML: ${{ matrix.enable_yaml }})"
+    if: "!contains(github.event.head_commit.message, '[ci skip]')"
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: Install packages (via apt)
+        if: runner.os == 'Linux'
+        run: sudo apt install ${{ matrix.toolchain.packages }} -y
+
+      - name: Configure
+        run: cmake -Bbuild -GNinja -DGPDS_BUILD_EXAMPLES=ON -DGPDS_BUILD_TESTS=ON -DGPDS_ENABLE_XML=${{ matrix.enable_xml }} -DGPDS_ENABLE_YAML=${{ matrix.enable_yaml }}
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run tests
+        run: ./build/test/gpds-tests

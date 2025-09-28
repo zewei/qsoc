@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Classification Map//EN" "classifyMap.dtd">
+<map>
+    <title>Classes</title>
+    
+    <topicref href="../topics/reference_classes.dita">
+        <topicmeta>
+            <navtitle>Classes</navtitle>
+            <shortdesc>The various classes provided by the <ph keyref="namespace"/> namespace.</shortdesc>
+        </topicmeta>
+        
+        <mapref href="reference_class_container.ditamap"/>
+        <mapref href="reference_class_value.ditamap"/>
+    </topicref>
+    
+</map>

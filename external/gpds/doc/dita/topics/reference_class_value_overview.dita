@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
+<concept id="reference_value_overview">
+    <title>Overview</title>
+    <shortdesc>The <apiname>value</apiname> class represents a value which should be
+        (de)serializable through <ph keyref="projectname"/>.</shortdesc>
+    <conbody>
+        <p>The following figure shows the <apiname>value</apiname> class design and related
+            classes:</p>
+        <fig>
+            <title>Value class design</title>
+            <image href="../../uml/exports/svg/documentation!container_4.svg"/>
+        </fig>
+    </conbody>
+</concept>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map>
+    <title>Class Value</title>
+    
+    <topicref collection-type="sequence" chunk="to-content">
+        <topicmeta>
+            <navtitle>Value</navtitle>
+            <shortdesc>The <apiname>Value</apiname> class.</shortdesc>
+        </topicmeta>
+        
+        <topicref href="../topics/reference_class_value_overview.dita">
+        </topicref>
+    </topicref>
+</map>

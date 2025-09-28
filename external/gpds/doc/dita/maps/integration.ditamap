@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map>
+    <title>Integration</title>
+    
+    <topicmeta>
+        <author>Joel Bodenmann</author>
+    </topicmeta>
+        
+    <topicref collection-type="sequence" chunk="to-content">
+        <topicmeta>
+            <navtitle>Integration</navtitle>
+            <shortdesc>A guide on how to integrate <ph keyref="projectname"/> into a project.</shortdesc>
+        </topicmeta>
+        
+        <topicref href="../topics/integration_overview.dita"/>
+        <topicref href="../topics/requirements.dita"/>
+        <topicref href="../topics/integration_cmake.dita"/>
+        <topicref href="../topics/integration_application.dita"/>
+    
+    </topicref>
+</map>

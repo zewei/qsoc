@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="Untitled">
+    <title>Overview</title>
+    
+    <prolog>
+        <author>Joel Bodenmann</author>
+        <metadata>
+          <keywords>
+              <indexterm>usage
+                  <index-see-also>integration</index-see-also>
+              </indexterm>
+          </keywords>
+        </metadata>
+    </prolog>
+    
+    <body>
+        <p>This topic explains the usage of the <ph keyref="projectname"/> library. See <xref href="integration_overview.dita"/>
+            for instructions on how to integrate the library into a project.</p>
+        
+        <section>
+            <title>General usage</title>
+            <p>The following figure illustrates how <ph keyref="projectname"/> is used by an address book application:</p>
+            <fig>
+                <image href="../../uml/exports/svg/model!usage_1.svg"/>
+            </fig>
+        </section>
+        
+        <section>
+            <title>Make class serializable</title>
+            <p>A class needs to inherit from the <apiname>container</apiname> class in order to
+                become serializable through <ph keyref="projectname"/>.</p>
+        </section>
+        
+        <example>
+            <title>Implement <apiname>serialize</apiname> interface</title>
+            <p>Implement the <apiname>gpds::serialize</apiname> interface by inheriting from the
+                respective class to make your own class become serializable through <ph
+                    keyref="projectname"/> as shown by the following UML class diagram:</p>
+            <fig>
+                <image href="../../uml/exports/svg/misc!example_02_3.svg"/>
+            </fig>
+            <p>Corresponding C++ code:</p>
+            <codeblock outputclass="language-cpp"><![CDATA[class car : public gpds::serialize {
+public:
+    std::string manufacturer;
+    std::string model;
+    int year_of_construction;
+    color color;
+
+    virtual gpds::container to_container() const override
+    {
+        gpds::container c;
+
+        c.add_value("manufacturer", manufacturer);
+        c.add_value("model", model);
+        c.add_value("year_of_construction", year_of_construction);
+        c.add_value("color", color.to_container());
+
+        return c;
+    }
+
+    virtual void from_container(const pds::container& c) override
+    {
+        manufacturer = c.get_value<std::string>("manufacturer");
+        model = c.get_value<std::string>("model");
+        year_of_construction = c.get_value<int>("year_of_construction");
+        color.from_container( *c.get_value<gpds::container*>( "color" ) );
+    }
+};
+
+class Color : public gpds::serialize
+{
+public:
+    std::string name;
+    int red;
+    int green;
+    int blue;
+
+    virtual gpds::container to_container() const override
+    {
+        gpds::container c;
+
+        c.add_attribute("format", "rgb");
+        c.add_attribute("name", name);
+
+        c.add_value("red", red).add_attribute("depth", "32");
+        c.add_value("green", green).add_attribute("depth", "32");
+        c.add_value("blue", blue).add_attribute("depth", "32");
+
+        return c;
+    }
+
+    virtual void from_container(const gpds::container& c) override
+    {
+        // Retrieve format
+        const std::string& format_string = c.get_attribute("format").value_or("n/a");
+        assert(format_string == std::string("rgb"));
+
+        name = c.get_attribute("name").value_or("n/a");
+        red = c.get_value<int>("red");
+        green = c.get_value<int>("green");
+        blue = c.get_value<int>("blue");
+    }
+};]]></codeblock>
+            <p>Once serialized with the XML archiver, the following output is produced:</p>
+            <codeblock outputclass="language-xml"><![CDATA[<car>
+    <color format="rgb" name="Black">
+        <blue depth="32">0</blue>
+        <green depth="32">0</green>
+        <red depth="32">0</red>
+    </color>
+    <manufacturer>Jeep</manufacturer>
+    <model>Grand Cherokee</model>
+    <year_of_construction>2009</year_of_construction>
+</car>]]></codeblock>
+            <note type="note">Values within a container are sorted alphabetically to improve look-up time.</note>
+        </example>
+        
+        <example>
+            <title>Serialize</title>
+            <p>Create an instance of <apiname>archiver_xml</apiname> (or of any other
+                <apiname>archiver</apiname> class).</p>
+            <p>Call <apiname>archiver::save()</apiname> to serialize:</p>
+            <codeblock outputclass="language-cpp"><![CDATA[class car car;
+
+std::sstream stream;
+gpds::archiver_xml ar;
+ar.save(stream, car, "car");
+
+std::cout << stream.str() << std::endl]]></codeblock>
+        </example>
+        
+        <example>
+            <title>Deserialize</title>
+            <p>Create an instance of <apiname>archiver_xml</apiname> (or of any other
+                <apiname>archiver</apiname> class).</p>
+            <p>Call <apiname>archiver::load()</apiname> to serialize:</p>
+            <codeblock outputclass="language-cpp"><![CDATA[class car car;
+
+gpds::archiver_xml ar;
+ar.load(stream, car, "car");]]></codeblock>
+        </example>
+    </body>
+    
+    <related-links>
+        <link href="integration_overview.dita"/>
+        <link href="architecture_overview.dita"/>
+    </related-links>
+    
+</topic>

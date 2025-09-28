@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE topic PUBLIC "-//OASIS//DTD DITA Topic//EN" "topic.dtd">
+<topic id="requirements">
+    <title>Requirements</title>
+    <prolog>
+        <metadata>
+            <keywords>
+                <indexterm>requiremets</indexterm>       
+            </keywords>
+        </metadata>
+    </prolog>
+    
+    <body>
+        <p>Using <ph keyref="projectname"/> only requires a C++17 compatible compiler (and
+            corresponding STL). Furthermore, <ph keyref="projectname"/> uses cmake as the primary build system.</p>
+    </body>
+</topic>
