@@ -139,20 +139,40 @@ QSocPowerPrimitive::PowerControllerConfig QSocPowerPrimitive::parsePowerConfig(
             domain.settle_on  = domainNode["settle_on"] ? domainNode["settle_on"].as<int>() : 0;
             domain.settle_off = domainNode["settle_off"] ? domainNode["settle_off"].as<int>() : 0;
 
-            // Follow clocks and resets
-            if (domainNode["follow"]) {
-                if (domainNode["follow"]["clock"] && domainNode["follow"]["clock"].IsSequence()) {
-                    for (size_t j = 0; j < domainNode["follow"]["clock"].size(); ++j) {
-                        domain.follow_clocks.append(
-                            QString::fromStdString(
-                                domainNode["follow"]["clock"][j].as<std::string>()));
+            // Follow entries for reset synchronization
+            if (domainNode["follow"] && domainNode["follow"].IsSequence()) {
+                for (size_t j = 0; j < domainNode["follow"].size(); ++j) {
+                    const YAML::Node &followNode = domainNode["follow"][j];
+                    if (!followNode.IsMap())
+                        continue;
+
+                    FollowEntry entry;
+                    if (followNode["clock"]) {
+                        entry.clock = QString::fromStdString(followNode["clock"].as<std::string>());
                     }
-                }
-                if (domainNode["follow"]["reset"] && domainNode["follow"]["reset"].IsSequence()) {
-                    for (size_t j = 0; j < domainNode["follow"]["reset"].size(); ++j) {
-                        domain.follow_resets.append(
-                            QString::fromStdString(
-                                domainNode["follow"]["reset"][j].as<std::string>()));
+                    if (followNode["reset"]) {
+                        entry.reset = QString::fromStdString(followNode["reset"].as<std::string>());
+                    }
+                    entry.stage = followNode["stage"] ? followNode["stage"].as<int>()
+                                                      : 4; // Default to 4 stages
+
+                    // Only add valid entries with strict validation
+                    if (!entry.clock.isEmpty() && !entry.reset.isEmpty()) {
+                        // FATAL: Check for host signal misuse (creates circular dependency)
+                        if (entry.clock == config.host_clock) {
+                            qCritical()
+                                << "FATAL: Domain" << domain.name
+                                << "follow entry cannot use host_clock" << config.host_clock
+                                << "as synchronization clock - this creates circular dependency!";
+                            continue; // Skip this erroneous configuration
+                        }
+                        if (entry.reset == config.host_reset) {
+                            qCritical() << "FATAL: Domain" << domain.name
+                                        << "follow entry cannot use host_reset" << config.host_reset
+                                        << "as reset output - this creates port conflict!";
+                            continue; // Skip this erroneous configuration
+                        }
+                        domain.follow_entries.append(entry);
                     }
                 }
             }
@@ -172,65 +192,134 @@ void QSocPowerPrimitive::generateModuleHeader(const PowerControllerConfig &confi
 
     out << "module " << config.moduleName << " (\n";
 
-    // Host clock and reset
-    out << "    input  wire " << config.host_clock << ", /**< Host clock (typically AO) */\n";
-    out << "    input  wire " << config.host_reset << ", /**< Host reset (typically AO) */\n";
+    // Initialize port tracking for "output win" mechanism
+    QSet<QString> addedSignals;
+    QStringList   portDecls;
+    QStringList   portComments;
 
-    // DFT test enable (optional)
-    if (!config.test_enable.isEmpty()) {
-        out << "    input  wire " << config.test_enable << ", /**< DFT test enable */\n";
+    // Host clock and reset (inputs)
+    portDecls << QString("    input  wire %1").arg(config.host_clock);
+    portComments << "/**< Host clock (typically AO) */";
+    addedSignals.insert(config.host_clock);
+
+    portDecls << QString("    input  wire %1").arg(config.host_reset);
+    portComments << "/**< Host reset (typically AO) */";
+    addedSignals.insert(config.host_reset);
+
+    // DFT test enable (optional, check for duplicates)
+    if (!config.test_enable.isEmpty() && !addedSignals.contains(config.test_enable)) {
+        portDecls << QString("    input  wire %1").arg(config.test_enable);
+        portComments << "/**< DFT test enable */";
+        addedSignals.insert(config.test_enable);
     }
 
-    // Power good inputs
+    // System reset for reset synchronization (check for duplicates)
+    if (!addedSignals.contains("rst_sys_n")) {
+        portDecls << QString("    input  wire rst_sys_n");
+        portComments << "/**< System reset for domain sync */";
+        addedSignals.insert("rst_sys_n");
+    }
+
+    // Power good inputs (check for duplicates)
     for (const auto &domain : config.domains) {
-        if (!domain.pgood.isEmpty()) {
-            out << "    input  wire " << domain.pgood << ", /**< " << domain.name
-                << " voltage good */\n";
+        if (!domain.pgood.isEmpty() && !addedSignals.contains(domain.pgood)) {
+            portDecls << QString("    input  wire %1").arg(domain.pgood);
+            portComments << QString("/**< %1 voltage good */").arg(domain.name);
+            addedSignals.insert(domain.pgood);
         }
     }
 
-    // Control inputs (enable and fault clear)
+    // Control inputs (enable and fault clear, check for duplicates)
     for (const auto &domain : config.domains) {
         YAML::Node yamlNode = m_domainYamlCache.value(domain.name);
         if (!isAODomain(domain, yamlNode)) {
-            out << "    input  wire en_" << domain.name << ", /**< Enable " << domain.name
-                << " */\n";
-            out << "    input  wire clr_" << domain.name << ", /**< Clear fault for " << domain.name
-                << " */\n";
+            QString enableName = QString("en_%1").arg(domain.name);
+            QString clearName  = QString("clr_%1").arg(domain.name);
+
+            if (!addedSignals.contains(enableName)) {
+                portDecls << QString("    input  wire %1").arg(enableName);
+                portComments << QString("/**< Enable %1 */").arg(domain.name);
+                addedSignals.insert(enableName);
+            }
+
+            if (!addedSignals.contains(clearName)) {
+                portDecls << QString("    input  wire %1").arg(clearName);
+                portComments << QString("/**< Clear fault for %1 */").arg(domain.name);
+                addedSignals.insert(clearName);
+            }
         }
     }
 
-    // ICG enable outputs
+    // ICG enable outputs (check for duplicates)
     for (const auto &domain : config.domains) {
-        out << "    output wire icg_en_" << domain.name << ", /**< ICG enable for " << domain.name
-            << " */\n";
+        QString icgName = QString("icg_en_%1").arg(domain.name);
+        if (!addedSignals.contains(icgName)) {
+            portDecls << QString("    output wire %1").arg(icgName);
+            portComments << QString("/**< ICG enable for %1 */").arg(domain.name);
+            addedSignals.insert(icgName);
+        }
     }
 
-    // Reset allow outputs
+    // NOTE: rst_gate_*_n are internal signals, not module ports
+
+    // Domain clock inputs for reset synchronizers (follow entries)
     for (const auto &domain : config.domains) {
-        out << "    output wire rst_allow_" << domain.name << ", /**< Reset allow for "
-            << domain.name << " */\n";
+        for (const auto &entry : domain.follow_entries) {
+            if (!addedSignals.contains(entry.clock)) {
+                portDecls << QString("    input  wire %1").arg(entry.clock);
+                portComments << QString("/**< Domain clock for %1 reset sync */").arg(domain.name);
+                addedSignals.insert(entry.clock);
+            }
+        }
     }
 
-    // Power switch outputs
+    // Power switch outputs (check for duplicates)
     for (const auto &domain : config.domains) {
         YAML::Node yamlNode = m_domainYamlCache.value(domain.name);
         if (!isAODomain(domain, yamlNode)) {
-            out << "    output wire sw_" << domain.name << ", /**< Switch for " << domain.name
-                << " */\n";
+            QString switchName = QString("sw_%1").arg(domain.name);
+            if (!addedSignals.contains(switchName)) {
+                portDecls << QString("    output wire %1").arg(switchName);
+                portComments << QString("/**< Switch for %1 */").arg(domain.name);
+                addedSignals.insert(switchName);
+            }
         }
     }
 
-    // Status outputs
-    for (int i = 0; i < config.domains.size(); ++i) {
-        const auto &domain = config.domains[i];
-        out << "    output wire rdy_" << domain.name << ", /**< " << domain.name << " ready */\n";
-        out << "    output wire flt_" << domain.name;
-        if (i < config.domains.size() - 1) {
-            out << ", /**< " << domain.name << " fault */\n";
-        } else {
-            out << "  /**< " << domain.name << " fault */\n";
+    // Reset synchronizer outputs (follow entries, OUTPUT WIN over inputs)
+    for (const auto &domain : config.domains) {
+        for (const auto &entry : domain.follow_entries) {
+            if (!addedSignals.contains(entry.reset)) {
+                portDecls << QString("    output wire %1").arg(entry.reset);
+                portComments << QString("/**< Synchronized reset for %1 */").arg(domain.name);
+                addedSignals.insert(entry.reset);
+            }
         }
+    }
+
+    // Status outputs (check for duplicates)
+    for (const auto &domain : config.domains) {
+        QString readyName = QString("rdy_%1").arg(domain.name);
+        QString faultName = QString("flt_%1").arg(domain.name);
+
+        if (!addedSignals.contains(readyName)) {
+            portDecls << QString("    output wire %1").arg(readyName);
+            portComments << QString("/**< %1 ready */").arg(domain.name);
+            addedSignals.insert(readyName);
+        }
+
+        if (!addedSignals.contains(faultName)) {
+            portDecls << QString("    output wire %1").arg(faultName);
+            portComments << QString("/**< %1 fault */").arg(domain.name);
+            addedSignals.insert(faultName);
+        }
+    }
+
+    // Output all ports with unified boundary judgment
+    for (int i = 0; i < portDecls.size(); ++i) {
+        bool    isLast = (i == portDecls.size() - 1);
+        QString comma  = isLast ? "" : ",";
+        out << portDecls[i] << comma << " " << portComments[i] << "\n";
     }
 
     out << ");\n\n";
@@ -240,6 +329,14 @@ void QSocPowerPrimitive::generateWireDeclarations(
     const PowerControllerConfig &config, QTextStream &out)
 {
     out << "    /* Internal wires for dependency aggregation */\n";
+    out << "    /* Note: Configure soft dependencies in YAML with type:'soft' */\n";
+    out << "    /* Example YAML soft dependency: */\n";
+    out << "    /*   - name: c906 */\n";
+    out << "    /*     depend: */\n";
+    out << "    /*       - name: sram */\n";
+    out << "    /*         type: soft   # This makes rdy_sram a soft dependency */\n";
+    out << "    /* Generated wire: dep_soft_all_c906 = rdy_sram; */\n";
+    out << "    /* If all dependencies are 'hard' (default), dep_soft_all remains 1'b1 */\n";
 
     for (const auto &domain : config.domains) {
         QString hardSig = getHardDependencySignal(domain);
@@ -249,7 +346,12 @@ void QSocPowerPrimitive::generateWireDeclarations(
             out << "    wire dep_hard_all_" << domain.name << " = " << hardSig << ";\n";
         }
         if (softSig != "1'b1") {
-            out << "    wire dep_soft_all_" << domain.name << " = " << softSig << ";\n";
+            out << "    wire dep_soft_all_" << domain.name << " = " << softSig
+                << "; /* Soft dependencies */\n";
+        } else if (!domain.depends.isEmpty()) {
+            // Has dependencies but none are soft - add comment for clarity
+            out << "    /* " << domain.name
+                << ": no soft dependencies (all hard), dep_soft_all tied to 1'b1 */\n";
         }
     }
 
@@ -258,6 +360,13 @@ void QSocPowerPrimitive::generateWireDeclarations(
 
 void QSocPowerPrimitive::generatePowerLogic(const PowerControllerConfig &config, QTextStream &out)
 {
+    // Generate internal wire declarations for rst_gate_n signals
+    out << "    /* Internal wires for FSM reset gates */\n";
+    for (const auto &domain : config.domains) {
+        out << "    wire rst_gate_" << domain.name << "_n;\n";
+    }
+    out << "\n";
+
     out << "    /* Power FSM instances */\n";
 
     for (const auto &domain : config.domains) {
@@ -319,7 +428,7 @@ void QSocPowerPrimitive::generatePowerLogic(const PowerControllerConfig &config,
         }
 
         out << "        .clk_enable   (icg_en_" << domain.name << "),\n";
-        out << "        .rst_allow    (rst_allow_" << domain.name << "),\n";
+        out << "        .rst_gate_n   (rst_gate_" << domain.name << "_n),\n";
 
         if (isAO) {
             out << "        .pwr_switch   (), /**< Unused for AO */\n";
@@ -331,6 +440,26 @@ void QSocPowerPrimitive::generatePowerLogic(const PowerControllerConfig &config,
         out << "        .valid        (), /**< Optional, not exported */\n";
         out << "        .fault        (flt_" << domain.name << ")\n";
         out << "    );\n\n";
+
+        // Generate reset synchronizers for follow entries
+        if (!domain.follow_entries.isEmpty()) {
+            out << "    /* Reset synchronizers for " << domain.name << " domain */\n";
+            for (int i = 0; i < domain.follow_entries.size(); ++i) {
+                const auto &entry = domain.follow_entries[i];
+                out << "    qsoc_power_rst_sync #(\n";
+                out << "        .STAGE (" << entry.stage << ")\n";
+                out << "    ) u_rst_sync_" << domain.name << "_" << i << " (\n";
+                out << "        .clk_dom     (" << entry.clock << "),\n";
+                out << "        .rst_gate_n  (rst_sys_n & rst_gate_" << domain.name << "_n),\n";
+                if (!config.test_enable.isEmpty()) {
+                    out << "        .test_en     (" << config.test_enable << "),\n";
+                } else {
+                    out << "        .test_en     (1'b0),\n";
+                }
+                out << "        .rst_dom_n   (" << entry.reset << ")\n";
+                out << "    );\n\n";
+            }
+        }
     }
 }
 
@@ -382,8 +511,9 @@ bool QSocPowerPrimitive::isPowerCellFileComplete(const QString &filePath)
     QString content = QTextStream(&file).readAll();
     file.close();
 
-    // Check if both qsoc_power_fsm and qsoc_rst_pipe modules exist
-    return content.contains("module qsoc_power_fsm") && content.contains("module qsoc_rst_pipe");
+    // Check if both qsoc_power_fsm and qsoc_power_rst_sync modules exist
+    return content.contains("module qsoc_power_fsm")
+           && content.contains("module qsoc_power_rst_sync");
 }
 
 QString QSocPowerPrimitive::generatePowerFSMModule()
@@ -395,7 +525,7 @@ QString QSocPowerPrimitive::generatePowerFSMModule()
     out << " * Module: qsoc_power_fsm\n";
     out << " * Minimal per-domain power controller with strict power sequencing\n";
     out << " * Power-up   : enable switch -> wait pgood+settle -> clock on -> release reset\n";
-    out << " * Power-down : assert reset -> clock off -> disable switch -> wait drop+settle\n";
+    out << " * Power-down : assert reset -> clock off and disable switch -> wait drop+settle\n";
     out << " * Hard depend blocks on timeout and enters FAULT with auto-heal\n";
     out << " * Soft depend warns on timeout and proceeds\n";
     out << " * test_en=1 forces power on, clock on, reset released, while FSM state is preserved\n";
@@ -422,7 +552,7 @@ QString QSocPowerPrimitive::generatePowerFSMModule()
     out << "    input  wire pgood,            /**< power good of this domain            */\n\n";
     out << "    /* Domain-side controls */\n";
     out << "    output reg  clk_enable,       /**< ICG enable for this domain clock     */\n";
-    out << "    output reg  rst_allow,        /**< reset allow for domain               */\n";
+    out << "    output reg  rst_gate_n,       /**< reset gate to synchronizer, active-low */\n";
     out << "    output reg  pwr_switch,       /**< power switch control                 */\n\n";
     out << "    /* Status */\n";
     out << "    output reg  ready,            /**< domain usable clock on reset off     */\n";
@@ -473,6 +603,8 @@ QString QSocPowerPrimitive::generatePowerFSMModule()
 
     out << "    /* One-cycle set for soft-timeout fault */\n";
     out << "    reg set_fault_soft;\n\n";
+    out << "    /* One-cycle pulse for entering S_TURN_OFF state */\n";
+    out << "    reg off_start;\n\n";
 
     out << "    /* 1) Sequential: state, timers, sticky fault */\n";
     out << "    always @(posedge clk or negedge rst_n) begin\n";
@@ -482,8 +614,10 @@ QString QSocPowerPrimitive::generatePowerFSMModule()
     out << "            t_on  <= {WIDTH{1'b0}};\n";
     out << "            t_off <= {WIDTH{1'b0}};\n";
     out << "            fault <= 1'b0;\n";
+    out << "            off_start <= 1'b0;\n";
     out << "        end else begin\n";
-    out << "            state <= state_n;\n\n";
+    out << "            state <= state_n;\n";
+    out << "            off_start <= (state != S_TURN_OFF) && (state_n == S_TURN_OFF);\n\n";
     out << "            /* Load N-1; zero means no wait */\n";
     out << "            if (ld_dep)\n";
     out << "                t_dep <= (WAIT_DEP_CYCLES == 0) ? {WIDTH{1'b0}}\n";
@@ -539,18 +673,20 @@ QString QSocPowerPrimitive::generatePowerFSMModule()
     out << "            end\n";
     out << "        end\n\n";
     out << "        S_TURN_ON: begin\n";
+    out << "            /* t_on runs as window until pgood rises; once high, it must remain high "
+           "until t_on==0 */\n";
     out << "            if (!ctrl_enable) begin\n";
     out << "                state_n = S_TURN_OFF;\n";
-    out << "                ld_off  = 1'b1;\n";
     out << "            end else if (pgood) begin\n";
     out << "                if (t_on == 0) state_n = S_CLK_ON; /* go to clock on state */\n";
-    out << "                else           dec_on  = 1'b1;\n";
+    out << "                else           dec_on  = 1'b1;     /* settle countdown only when pgood "
+           "*/\n";
     out << "            end else begin\n";
     out << "                if (t_on == 0) begin\n";
     out << "                    state_n = S_FAULT; /* on-timeout */\n";
     out << "                    ld_dep  = 1'b1;    /* cooldown */\n";
     out << "                end else begin\n";
-    out << "                    dec_on  = 1'b1;\n";
+    out << "                    dec_on  = 1'b1;    /* timeout countdown when !pgood */\n";
     out << "                end\n";
     out << "            end\n";
     out << "        end\n\n";
@@ -560,6 +696,8 @@ QString QSocPowerPrimitive::generatePowerFSMModule()
     out << "            end\n";
     out << "        end\n\n";
     out << "        S_TURN_OFF: begin\n";
+    out << "            /* Load settle timer when first entering this state */\n";
+    out << "            if (off_start) ld_off = 1'b1;\n\n";
     out << "            if (!pgood) begin\n";
     out << "                if (t_off == 0) state_n = S_OFF;\n";
     out << "                else            dec_off = 1'b1;\n";
@@ -592,7 +730,6 @@ QString QSocPowerPrimitive::generatePowerFSMModule()
     out << "            /* Assert reset first while clock is still on, then proceed to turn off "
            "*/\n";
     out << "            state_n = S_TURN_OFF;\n";
-    out << "            ld_off  = 1'b1;\n";
     out << "        end\n\n";
     out << "        default: state_n = S_FAULT;\n";
     out << "        endcase\n";
@@ -601,7 +738,7 @@ QString QSocPowerPrimitive::generatePowerFSMModule()
     out << "    /* 3) Combinational: outputs (Moore) */\n";
     out << "    always @* begin\n";
     out << "        clk_enable = 1'b0;\n";
-    out << "        rst_allow  = 1'b0;\n";
+    out << "        rst_gate_n = 1'b0;\n";
     out << "        pwr_switch = 1'b0;\n";
     out << "        ready      = 1'b0;\n";
     out << "        valid      = 1'b0;\n\n";
@@ -610,21 +747,24 @@ QString QSocPowerPrimitive::generatePowerFSMModule()
     out << "            /* Off: clock gated, reset asserted, switch off */\n";
     out << "        end\n";
     out << "        S_WAIT_DEP: begin\n";
-    out << "            /* Waiting depends with power off */\n";
+    out << "            /* Waiting for dependencies with power off */\n";
     out << "        end\n";
     out << "        S_TURN_ON: begin\n";
     out << "            if (HAS_SWITCH) pwr_switch = 1'b1 /* request power */;\n";
     out << "            valid = pgood;\n";
+    out << "            /* t_on counts as window; transition requires pgood==1 when t_on==0 */\n";
     out << "        end\n";
     out << "        S_ON: begin\n";
+    out << "            /* Clock stays on, release reset, domain ready */\n";
     out << "            if (HAS_SWITCH) pwr_switch = 1'b1;\n";
     out << "            valid     = 1'b1;\n";
-    out << "            rst_allow = 1'b1  /* release reset first */;\n";
-    out << "            clk_enable= 1'b1  /* then enable clock */;\n";
+    out << "            rst_gate_n = 1'b1;  /* release reset */\n";
+    out << "            clk_enable= 1'b1;  /* enable clock */\n";
     out << "            ready     = 1'b1;\n";
     out << "        end\n";
     out << "        S_TURN_OFF: begin\n";
-    out << "            /* Clock off, reset asserted, waiting for power drop */\n";
+    out << "            /* Reset asserted, clock gated, switch off, waiting for pgood drop + "
+           "settle */\n";
     out << "            valid = pgood;\n";
     out << "        end\n";
     out << "        /* New states for clock-before-reset sequencing */\n";
@@ -632,11 +772,13 @@ QString QSocPowerPrimitive::generatePowerFSMModule()
     out << "            if (HAS_SWITCH) pwr_switch = 1'b1;\n";
     out << "            clk_enable = 1'b1;\n";
     out << "            valid = pgood;\n";
+    out << "            rst_gate_n = 1'b0;  /* hold reset for one cycle before release */\n";
     out << "        end\n";
     out << "        S_RST_ASSERT: begin\n";
     out << "            if (HAS_SWITCH) pwr_switch = 1'b1;\n";
     out << "            clk_enable = 1'b1;\n";
     out << "            valid = pgood;\n";
+    out << "            rst_gate_n = 1'b0;  /* assert reset before clock disable */\n";
     out << "        end\n";
     out << "        S_FAULT: begin\n";
     out << "            /* Quarantine: clock off, reset asserted, power off */\n";
@@ -645,7 +787,7 @@ QString QSocPowerPrimitive::generatePowerFSMModule()
     out << "        /* DFT force-on override */\n";
     out << "        if (test_en) begin\n";
     out << "            if (HAS_SWITCH) pwr_switch = 1'b1;\n";
-    out << "            rst_allow  = 1'b1;\n";
+    out << "            rst_gate_n = 1'b1;\n";
     out << "            clk_enable = 1'b1;\n";
     out << "            ready      = 1'b1;\n";
     out << "            valid      = 1'b1;\n";
@@ -661,23 +803,27 @@ QString QSocPowerPrimitive::generateResetPipeModule()
     QString     code;
     QTextStream out(&code);
 
-    out << "/* qsoc_rst_pipe\n";
-    out << " * Async assert, sync deassert reset pipeline for a domain\n";
-    out << " * Assert does not require clock, deassert requires STAGES edges on clk_dom\n";
+    out << "/* qsoc_power_rst_sync\n";
+    out << " * Async assert, sync deassert reset synchronizer for power domains\n";
+    out << " * Assert does not require clock, deassert requires STAGE edges on clk_dom\n";
     out << " */\n";
-    out << "module qsoc_rst_pipe #(parameter integer STAGES=4)(\n";
+    out << "module qsoc_power_rst_sync #(parameter integer STAGE=4)(\n";
     out << "    input  wire clk_dom,      /**< domain clock source                   */\n";
     out << "    input  wire rst_gate_n,   /**< async assert, sync deassert           */\n";
     out << "    input  wire test_en,      /**< DFT force release                     */\n";
     out << "    output wire rst_dom_n     /**< synchronized domain reset, active-low */\n";
     out << ");\n";
-    out << "    reg [STAGES-1:0] sh;\n";
-    out << "    wire rst_n_int = test_en ? 1'b1 : rst_gate_n;\n\n";
-    out << "    always @(posedge clk_dom or negedge rst_n_int) begin\n";
-    out << "        if (!rst_n_int) sh <= {STAGES{1'b0}};         /* async assert */\n";
-    out << "        else            sh <= {sh[STAGES-2:0], 1'b1}; /* sync deassert */\n";
+    out << "    reg [STAGE-1:0] sr;\n\n";
+    out << "    /* async assert on rst_gate_n low */\n";
+    out << "    always @(posedge clk_dom or negedge rst_gate_n) begin\n";
+    out << "        if (!rst_gate_n) begin\n";
+    out << "            sr <= {STAGE{1'b0}};\n";
+    out << "        end else begin\n";
+    out << "            sr <= {sr[STAGE-2:0], 1'b1};\n";
+    out << "        end\n";
     out << "    end\n\n";
-    out << "    assign rst_dom_n = sh[STAGES-1];\n";
+    out << "    /* test_en overrides to release reset */\n";
+    out << "    assign rst_dom_n = test_en ? 1'b1 : sr[STAGE-1];\n";
     out << "endmodule\n";
 
     return code;

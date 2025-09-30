@@ -33,9 +33,7 @@ power:
         wait_dep: 0                  # Dependency wait cycles
         settle_on: 0                 # Power-on settle cycles
         settle_off: 0                # Power-off settle cycles
-        follow:                      # Clock/reset follow lists
-          clock: []
-          reset: []
+        follow: []                   # Reset synchronizer entries (typically empty for AO)
 
       # Root domain: depend: [] = controllable root type
       - name: vmem
@@ -45,9 +43,7 @@ power:
         wait_dep: 0
         settle_on: 100
         settle_off: 50
-        follow:
-          clock: []
-          reset: []
+        follow: []                   # Reset synchronizer entries (typically empty for root)
 
       # Normal domain: depend: [...] = dependent type
       - name: gpu
@@ -61,9 +57,10 @@ power:
         wait_dep: 200
         settle_on: 120
         settle_off: 80
-        follow:
-          clock: [clk_gpu]
-          reset: [rst_gpu]
+        follow:                      # Reset synchronizer entries
+          - clock: clk_gpu           # Domain clock (typically post-ICG)
+            reset: rst_req_gpu_n     # Synchronized reset output (rst_req_*)
+            stage: 4                 # Synchronizer stages (optional, default: 4)
 ```
 
 == POWER DOMAINS
@@ -153,9 +150,9 @@ Key behaviors:
 - All cycle parameters are counted on host_clock (AO clock domain)
 - Reset release is synchronized to clock to meet recovery/removal timing requirements
 
-Also included in power_cell.v is qsoc_rst_pipe for domain reset synchronization:
+Also included in power_cell.v is qsoc_power_rst_sync for domain reset synchronization:
 ```verilog
-module qsoc_rst_pipe #(parameter integer STAGES=4)(
+module qsoc_power_rst_sync #(parameter integer STAGE=4)(
     input  wire clk_dom,      /**< domain clock source                   */
     input  wire rst_gate_n,   /**< async assert, sync deassert           */
     input  wire test_en,      /**< DFT force release                     */
@@ -163,7 +160,7 @@ module qsoc_rst_pipe #(parameter integer STAGES=4)(
 );
 ```
 
-qsoc_rst_pipe provides async assert, sync deassert reset synchronization. Assert does not require clock, deassert requires STAGES edges on clk_dom. Default STAGES=4 provides better metastability protection.
+qsoc_power_rst_sync provides async assert, sync deassert reset synchronization. Assert does not require clock, deassert requires STAGE edges on clk_dom. Default STAGE=4 provides better metastability protection.
 
 == GENERATED INTERFACES
 <soc-net-power-interfaces>
@@ -190,6 +187,39 @@ Dependency aggregation is automatic:
 wire dep_hard_all_gpu = rdy_ao;              /**< Hard dependencies only */
 wire dep_soft_all_gpu = rdy_vmem;            /**< Soft dependencies only */
 /* No dependencies = tie to 1'b1 */
+```
+
+== RESET SYNCHRONIZATION
+<soc-net-power-reset-sync>
+Power controllers support domain-specific reset synchronization through follow entries. Each entry mechanically maps to a qsoc_power_rst_sync instance using KISS (Keep It Simple) principle:
+
+```yaml
+follow:                          # Reset synchronizer array (optional)
+  - clock: clk_gpu               # Domain clock input (required)
+    reset: rst_gpu_n             # Synchronized reset output (required)
+    stage: 4                     # Synchronizer stages (optional, default: 4)
+  - clock: clk_gpu_dsp           # Additional synchronizers for same domain
+    reset: rst_gpu_dsp_n
+    stage: 6                     # Different stage count
+```
+
+Key characteristics:
+- Direct array format eliminates ambiguous clock/reset pairing from previous versions
+- Each entry becomes one qsoc_power_rst_sync instance with dedicated ports
+- Reset gate signal: `rst_sys_n & rst_gate_domain_n` (async assert, sync deassert)
+- FSM outputs `rst_gate_n` (internal permission), synchronizer outputs `rst_req_*_n` (final reset)
+- Test enable bypass preserves DFT capability
+- Stage parameter controls synchronizer depth (1-16 stages typical)
+- Empty follow array generates no synchronizers (common for AO/root domains)
+
+Generated RTL pattern per entry:
+```verilog
+qsoc_power_rst_sync #(.STAGE(4)) u_rst_sync_gpu_0 (
+    .clk_dom     (clk_gpu),
+    .rst_gate_n  (rst_sys_n & rst_gate_gpu_n),
+    .test_en     (test_en),
+    .rst_dom_n   (rst_req_gpu_n)
+);
 ```
 
 == PROPERTIES
@@ -221,7 +251,7 @@ wire dep_soft_all_gpu = rdy_vmem;            /**< Soft dependencies only */
     [`wait_dep`], [Integer], [Yes], [Dependency wait cycles],
     [`settle_on`], [Integer], [Yes], [Power-on settle cycles],
     [`settle_off`], [Integer], [Yes], [Power-off settle cycles],
-    [`follow`], [Map], [No], [Clock/reset follow signal lists],
+    [`follow`], [Array], [No], [Reset synchronizer entry array],
   )],
   caption: [Domain Properties],
 )
