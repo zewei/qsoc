@@ -1,3 +1,4 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/zewei/qsoc)
 # QSoC - Quick System on Chip Studio
 
 ![QSoC Logo](./doc/en/image/logo.svg)
