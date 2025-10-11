@@ -1,0 +1,1148 @@
+# STM32H750 SoC Net (aligned to STM32H7 family features; adjust per exact H750 sub-variant)
+# STM32H750 SoC Net（基于 STM32H7 系列特性；如有子型号差异请调整）
+
+port:  # 顶层端口定义
+  hse_in:     # 外部高速晶振输入（常见 8~25 MHz）
+    direction: input
+    type: logic
+  lse_in:     # 外部低速晶振输入（32.768 kHz）
+    direction: input
+    type: logic
+  nreset:     # 外部复位输入（低有效/按设计约定）
+    direction: input
+    type: logic
+
+  # External memories / high-speed I/O (selected samples)  # 外部存储/高速 IO（示例）
+  qspi_io:    # QSPI 数据线（四线）
+    direction: inout
+    type: logic[3:0]
+  qspi_cs_n:  # QSPI 片选（低有效）
+    direction: output
+    type: logic
+  qspi_sck:   # QSPI 时钟
+    direction: output
+    type: logic
+  fmc_bus:    # FMC 外设总线抽象（地址/数据/控制）
+    direction: inout
+    type: logic[63:0]
+
+  # SDMMC  # SD 卡/EMMC 控制接口
+  sdmmc1_clk: # SDMMC1 时钟
+    direction: output
+    type: logic
+  sdmmc1_cmd: # SDMMC1 命令线
+    direction: inout
+    type: logic
+  sdmmc1_dat: # SDMMC1 数据线（4 位；如需 8 位请扩展）
+    direction: inout
+    type: logic[3:0]
+  sdmmc2_clk: # SDMMC2 时钟
+    direction: output
+    type: logic
+  sdmmc2_cmd: # SDMMC2 命令线
+    direction: inout
+    type: logic
+  sdmmc2_dat: # SDMMC2 数据线（4 位）
+    direction: inout
+    type: logic[3:0]
+
+  # USB FS/HS  # USB 全速/高速
+  usb_fs_dm:  # USB FS D-
+    direction: inout
+    type: logic
+  usb_fs_dp:  # USB FS D+
+    direction: inout
+    type: logic
+  ulpi_bus:   # ULPI 数据总线（外接 HS PHY）
+    direction: inout
+    type: logic[7:0]
+  ulpi_clk:   # ULPI 参考时钟（来自 PHY）
+    direction: input
+    type: logic
+  ulpi_stp:   # ULPI STP（主设备停止）
+    direction: output
+    type: logic
+  ulpi_dir:   # ULPI DIR（PHY 指示方向）
+    direction: input
+    type: logic
+  ulpi_nxt:   # ULPI NXT（PHY 指示下一个有效）
+    direction: input
+    type: logic
+
+  # Ethernet (MII/RMII)  # 以太网（MII/RMII 抽象）
+  rmii_bus:   # RMII 信号集合抽象
+    direction: inout
+    type: logic[9:0]
+  mdc:        # 管理数据时钟（MDIO 管理）
+    direction: output
+    type: logic
+  mdio:       # 管理数据 IO
+    direction: inout
+    type: logic
+
+  # Display / Camera  # 显示/摄像头
+  ltdc_rgb:   # RGB 并行数据 24 位
+    direction: output
+    type: logic[23:0]
+  ltdc_hsync: # 行同步
+    direction: output
+    type: logic
+  ltdc_vsync: # 场同步
+    direction: output
+    type: logic
+  ltdc_clk:   # 像素时钟
+    direction: output
+    type: logic
+  ltdc_de:    # 数据有效
+    direction: output
+    type: logic
+  dcmi_bus:   # DCMI 并行数据（最多 14 位，示例 12 位）
+    direction: input
+    type: logic[11:0]
+  dcmi_pclk:  # 摄像头像素时钟
+    direction: input
+    type: logic
+  dcmi_hsync: # 摄像头行同步
+    direction: input
+    type: logic
+  dcmi_vsync: # 摄像头像素场同步
+    direction: input
+    type: logic
+
+  # Audio  # 音频接口（以 SAI 为例）
+  sai1_sd:    # SAI1 数据线（支持多 slot，抽象为 4 线）
+    direction: inout
+    type: logic[3:0]
+  sai1_sck:   # SAI1 串行时钟
+    direction: inout
+    type: logic
+  sai1_fs:    # SAI1 帧同步
+    direction: inout
+    type: logic
+  sai1_mclk:  # SAI1 主时钟
+    direction: output
+    type: logic
+  sai2_sd:    # SAI2 数据线
+    direction: inout
+    type: logic[3:0]
+  sai2_sck:   # SAI2 串行时钟
+    direction: inout
+    type: logic
+  sai2_fs:    # SAI2 帧同步
+    direction: inout
+    type: logic
+  sai2_mclk:  # SAI2 主时钟
+    direction: output
+    type: logic
+
+  # Serial (example exposure; expand as needed)  # 串口/I2C/SPI 示例对外暴露端口
+  usart1_tx:  # USART1 TX
+    direction: output
+    type: logic
+  usart1_rx:  # USART1 RX
+    direction: input
+    type: logic
+  i2c1_scl:   # I2C1 SCL
+    direction: inout
+    type: logic
+  i2c1_sda:   # I2C1 SDA
+    direction: inout
+    type: logic
+  spi1_sck:   # SPI1 SCK
+    direction: output
+    type: logic
+  spi1_mosi:  # SPI1 MOSI
+    direction: output
+    type: logic
+  spi1_miso:  # SPI1 MISO
+    direction: input
+    type: logic
+  spi1_nss:   # SPI1 片选
+    direction: output
+    type: logic
+
+instance:  # 模块实例定义
+  # Core and interconnect  # 核心与互联
+  cpu:
+    module: cortex_m7                                      # Cortex-M7 内核
+    parameter:
+      FMAX_MHZ: 480                                        # 最高 480MHz（典型）
+    port:
+      hclk:    # AHB 时钟域
+        link: hclk
+      hresetn: # 全局复位（低有效）
+        link: sys_rst_n
+      i_code_axi: # AXI 指令端口（抽象）
+        link: axi_code
+      d_data_axi: # AXI 数据端口（抽象）
+        link: axi_data
+
+  axi_matrix:
+    module: axi_interconnect                               # AXI 矩阵互联
+    parameter:
+      NUM_M: 3     # CPU ICODE, CPU DDATA, MDMA             # AXI 主端口数量
+      NUM_S: 6     # SRAM, FMC, QSPI, SDMMC, USBHS, ETH      # AXI 从端口数量
+      DATA_W: 64                                             # AXI 数据位宽
+      ADDR_W: 32                                             # AXI 地址位宽
+    port:
+      aclk:    # AXI 时钟
+        link: aclk
+      aresetn: # AXI 复位
+        link: sys_rst_n
+
+  ahb_bus:
+    module: ahb_interconnect                               # AHB 总线互联
+    parameter:
+      NUM_M: 4     # AXI-to-AHB bridges, DMA, USBFS, ETH MAC # AHB 主设备数量
+      NUM_S: 8     # TCM SRAM, SRAM, peripherals             # AHB 从设备数量
+    port:
+      hclk:    # AHB 时钟
+        link: hclk
+      hresetn: # AHB 复位
+        link: sys_rst_n
+
+  apb1:
+    module: apb_bridge                                     # APB1 桥
+    port:
+      pclk:    # APB1 时钟
+        link: pclk1
+      presetn: # APB1 复位
+        link: sys_rst_n
+  apb2:
+    module: apb_bridge                                     # APB2 桥
+    port:
+      pclk:    # APB2 时钟
+        link: pclk2
+      presetn: # APB2 复位
+        link: sys_rst_n
+  apb3:
+    module: apb_bridge                                     # APB3 桥
+    port:
+      pclk:    # APB3 时钟
+        link: pclk3
+      presetn: # APB3 复位
+        link: sys_rst_n
+  apb4:
+    module: apb_bridge                                     # APB4 桥
+    port:
+      pclk:    # APB4 时钟
+        link: pclk4
+      presetn: # APB4 复位
+        link: sys_rst_n
+
+  # Memories / external interfaces  # 片上存储/外部接口
+  itcm_sram:
+    module: sram_tcm                                       # 指令 TCM
+    parameter: 
+      SIZE_KB: 64                                          # 大小（KB）
+  dtcm_sram:
+    module: sram_tcm                                       # 数据 TCM
+    parameter: 
+      SIZE_KB: 128                                         # 大小（KB）
+  sram:
+    module: ahb_sram                                       # 片上 SRAM
+    parameter: 
+      SIZE_KB: 512                                         # 大小（KB）
+
+  fmc:
+    module: fmc_controller                                 # 灵活存储控制器
+    port:
+      hclk:    # AHB 时钟
+        link: hclk
+      hresetn: # 复位
+        link: sys_rst_n
+      ext_bus: # 对外 FMC 总线
+        uplink: fmc_bus
+
+  qspi:
+    module: qspi_controller                                # QSPI 控制器
+    port:
+      aclk:     # AXI/内核高速时钟
+        link: aclk
+      aresetn:  # 复位
+        link: sys_rst_n
+      io:       # 数据线
+        uplink: qspi_io[3:0]
+      sck:      # 时钟
+        uplink: qspi_sck
+      cs_n:     # 片选
+        uplink: qspi_cs_n
+
+  sdmmc1:
+    module: sdmmc_controller                               # SDMMC1 控制器
+    port:
+      hclk:    # AHB 时钟
+        link: hclk
+      hresetn: # 复位
+        link: sys_rst_n
+      sd_clk:  # 对外时钟
+        uplink: sdmmc1_clk
+      sd_cmd:  # 对外命令
+        uplink: sdmmc1_cmd
+      sd_dat:  # 对外数据线
+        uplink: sdmmc1_dat[3:0]
+  sdmmc2:
+    module: sdmmc_controller                               # SDMMC2 控制器
+    port:
+      hclk:    # AHB 时钟
+        link: hclk
+      hresetn: # 复位
+        link: sys_rst_n
+      sd_clk:  # 对外时钟
+        uplink: sdmmc2_clk
+      sd_cmd:  # 对外命令
+        uplink: sdmmc2_cmd
+      sd_dat:  # 对外数据线
+        uplink: sdmmc2_dat[3:0]
+
+  # USB  # USB 控制器
+  usb_fs:
+    module: usb_otg_fs                                     # 全速 USB OTG
+    port:
+      hclk:    # 时钟
+        link: hclk
+      hresetn: # 复位
+        link: sys_rst_n
+      dm:      # D-
+        uplink: usb_fs_dm
+      dp:      # D+
+        uplink: usb_fs_dp
+  usb_hs:
+    module: usb_otg_hs_ulpi                                # 高速 USB（ULPI 外接 PHY）
+    port:
+      aclk:    # 高速时钟
+        link: aclk
+      aresetn: # 复位
+        link: sys_rst_n
+      ulpi_d:  # ULPI 数据
+        uplink: ulpi_bus[7:0]
+      ulpi_clk: # ULPI 时钟
+        uplink: ulpi_clk
+      ulpi_stp: # ULPI STP
+        uplink: ulpi_stp
+      ulpi_dir: # ULPI DIR
+        uplink: ulpi_dir
+      ulpi_nxt: # ULPI NXT
+        uplink: ulpi_nxt
+
+  # Ethernet  # 以太网 MAC
+  eth:
+    module: ethernet_mac                                   # 以太网 MAC 控制器
+    port:
+      hclk:    # AHB 时钟
+        link: hclk
+      hresetn: # 复位
+        link: sys_rst_n
+      rmii:    # RMII 信号集合
+        uplink: rmii_bus[9:0]
+      mdc:     # MDIO 管理时钟
+        uplink: mdc
+      mdio:    # MDIO 管理数据
+        uplink: mdio
+
+  # Display / Camera  # 显示控制器/摄像头接口
+  ltdc:
+    module: ltdc_controller                                # LCD-TFT 显示控制器
+    port:
+      aclk:      # 高速时钟（像素/总线）
+        link: aclk
+      aresetn:   # 复位
+        link: sys_rst_n
+      rgb:       # RGB 数据
+        uplink: ltdc_rgb[23:0]
+      hsync:     # 行同步
+        uplink: ltdc_hsync
+      vsync:     # 场同步
+        uplink: ltdc_vsync
+      de:        # 数据有效
+        uplink: ltdc_de
+      pixclk:    # 像素时钟
+        uplink: ltdc_clk
+  dcmi:
+    module: dcmi_controller                                # 数字摄像接口
+    port:
+      hclk:    # AHB 时钟
+        link: hclk
+      hresetn: # 复位
+        link: sys_rst_n
+      d:       # 数据位
+        uplink: dcmi_bus[11:0]
+      pclk:    # 像素时钟
+        uplink: dcmi_pclk
+      hsync:   # 行同步
+        uplink: dcmi_hsync
+      vsync:   # 场同步
+        uplink: dcmi_vsync
+
+  # Analog  # 模数/数模
+  adc1:
+    module: adc                                            # ADC1
+  adc2:
+    module: adc                                            # ADC2
+  adc3:
+    module: adc                                            # ADC3
+  dac:
+    module: dac_dual                                       # 双通道 DAC
+
+  # SAI audio (2 blocks)  # 两组 SAI 音频接口
+  sai1:
+    module: sai                                            # SAI1
+    port:
+      pclk:   # APB2 时钟
+        link: pclk2
+      presetn: # 复位
+        link: sys_rst_n
+      sd:     # 数据线
+        uplink: sai1_sd[3:0]
+      sck:    # 串行时钟
+        uplink: sai1_sck
+      fs:     # 帧同步
+        uplink: sai1_fs
+      mclk:   # 主时钟
+        uplink: sai1_mclk
+  sai2:
+    module: sai                                            # SAI2
+    port:
+      pclk:   # APB2 时钟
+        link: pclk2
+      presetn: # 复位
+        link: sys_rst_n
+      sd:     # 数据线
+        uplink: sai2_sd[3:0]
+      sck:    # 串行时钟
+        uplink: sai2_sck
+      fs:     # 帧同步
+        uplink: sai2_fs
+      mclk:   # 主时钟
+        uplink: sai2_mclk
+
+  # SPI/I2S (up to 6)  # SPI/I2S（最多 6 个）
+  spi1: 
+    module: apb_spi                                        # SPI1
+  spi2: 
+    module: apb_spi                                        # SPI2
+  spi3: 
+    module: apb_spi                                        # SPI3
+  spi4: 
+    module: apb_spi                                        # SPI4
+  spi5: 
+    module: apb_spi                                        # SPI5
+  spi6: 
+    module: apb_spi                                        # SPI6
+
+  # I2C (up to 4)  # I2C（最多 4 个）
+  i2c1: 
+    module: apb_i2c                                        # I2C1
+  i2c2: 
+    module: apb_i2c                                        # I2C2
+  i2c3: 
+    module: apb_i2c                                        # I2C3
+  i2c4: 
+    module: apb_i2c                                        # I2C4
+
+  # USART/UART (up to 6+)  # 串口（最多 6+）
+  usart1: 
+    module: apb_usart                                      # USART1
+  usart2: 
+    module: apb_usart                                      # USART2
+  usart3: 
+    module: apb_usart                                      # USART3
+  uart4:  
+    module: apb_uart                                       # UART4
+  uart5:  
+    module: apb_uart                                       # UART5
+  usart6: 
+    module: apb_usart                                      # USART6
+
+  # FDCAN (2)  # 2 路 FDCAN
+  fdcan1: 
+    module: fdcan                                          # FDCAN1
+  fdcan2: 
+    module: fdcan                                          # FDCAN2
+
+  # Timers (subset; add more as needed)  # 定时器（部分列出，可根据需求补充）
+  tim1:  
+    module: timer_advanced                                 # 高级定时器 TIM1
+  tim8:  
+    module: timer_advanced                                 # 高级定时器 TIM8
+  tim2:  
+    module: timer_general                                  # 通用定时器 TIM2
+  tim3:  
+    module: timer_general                                  # 通用定时器 TIM3
+  tim4:  
+    module: timer_general                                  # 通用定时器 TIM4
+  tim5:  
+    module: timer_general                                  # 通用定时器 TIM5
+  tim6:  
+    module: timer_basic                                    # 基本定时器 TIM6
+  tim7:  
+    module: timer_basic                                    # 基本定时器 TIM7
+  tim12: 
+    module: timer_general                                  # 通用定时器 TIM12
+  tim13: 
+    module: timer_general                                  # 通用定时器 TIM13
+  tim14: 
+    module: timer_general                                  # 通用定时器 TIM14
+  tim15: 
+    module: timer_general                                  # 通用定时器 TIM15
+  tim16: 
+    module: timer_general                                  # 通用定时器 TIM16
+  tim17: 
+    module: timer_general                                  # 通用定时器 TIM17
+
+  # GPIO ports (A..K typical on H7)  # GPIO 端口（H7 系列常见 A..K）
+  gpioa: 
+    module: apb_gpio                                       # GPIOA
+  gpiob: 
+    module: apb_gpio                                       # GPIOB
+  gpioc: 
+    module: apb_gpio                                       # GPIOC
+  gpiod: 
+    module: apb_gpio                                       # GPIOD
+  gpioe: 
+    module: apb_gpio                                       # GPIOE
+  gpiof: 
+    module: apb_gpio                                       # GPIOF
+  gpiog: 
+    module: apb_gpio                                       # GPIOG
+  gpioh: 
+    module: apb_gpio                                       # GPIOH
+  gpioi: 
+    module: apb_gpio                                       # GPIOI
+  gpioj: 
+    module: apb_gpio                                       # GPIOJ
+  gpiok: 
+    module: apb_gpio                                       # GPIOK
+
+  # RCC/Clock tree  # 时钟树/RCC
+  rcc:
+    module: rcc_h7                                          # RCC 模块（H7）
+    parameter:
+      # PLL 配置参数
+      PLLM: 8                                               # PLL 输入分频器（HSE/8）
+      PLLN: 200                                             # PLL 倍频器（8*200=1600MHz）
+      PLLP: 2                                               # PLL 系统时钟分频器（1600/2=800MHz）
+      PLLQ: 4                                               # PLL USB 时钟分频器（1600/4=400MHz）
+      PLLR: 2                                               # PLL AXI 时钟分频器（1600/2=800MHz）
+      # 时钟分频器
+      AHB_PRESC: 1                                          # AHB 预分频器（800/1=800MHz）
+      APB1_PRESC: 2                                         # APB1 预分频器（800/2=200MHz）
+      APB2_PRESC: 1                                         # APB2 预分频器（800/1=800MHz）
+      APB3_PRESC: 2                                         # APB3 预分频器（800/2=400MHz）
+      APB4_PRESC: 2                                         # APB4 预分频器（800/2=400MHz）
+    port:
+      hse:     # 连接外部 HSE
+        uplink: hse_in
+      lse:     # 连接外部 LSE
+        uplink: lse_in
+      # 输出时钟
+      sysclk:  # 系统时钟（800MHz）
+        link: sysclk
+      hclk:    # AHB 时钟（800MHz）
+        link: hclk
+      pclk1:   # APB1 时钟（200MHz）
+        link: pclk1
+      pclk2:   # APB2 时钟（800MHz）
+        link: pclk2
+      pclk3:   # APB3 时钟（400MHz）
+        link: pclk3
+      pclk4:   # APB4 时钟（400MHz）
+        link: pclk4
+      aclk:    # AXI 时钟（800MHz）
+        link: aclk
+      usbclk:  # USB 时钟（48MHz）
+        link: usbclk
+      # 专用时钟
+      adcclk:  # ADC 时钟（独立时钟域）
+        link: adcclk
+      ltdc_clk: # LTDC 像素时钟（独立时钟域）
+        link: ltdc_clk
+      sai1_clk: # SAI1 音频时钟（独立时钟域）
+        link: sai1_clk
+      sai2_clk: # SAI2 音频时钟（独立时钟域）
+        link: sai2_clk
+      eth_clk: # 以太网时钟（独立时钟域）
+        link: eth_clk
+      lsi_clk: # 内部低速时钟（32kHz）
+        link: lsi_clk
+      # 复位输出
+      sys_rst_n: # 系统复位（低有效）
+        link: sys_rst_n
+      periph_rst_n: # 外设复位（低有效）
+        link: periph_rst_n
+      wdg_rst_n: # 看门狗复位（低有效）
+        link: wdg_rst_n
+      lp_rst_n: # 低功耗复位（低有效）
+        link: lp_rst_n
+
+  # 看门狗模块  # Watchdog modules
+  iwdg:
+    module: iwdg                                            # 独立看门狗
+    port:
+      lsi:     # 内部低速时钟
+        link: lsi_clk
+      wdg_rst_n: # 看门狗复位
+        link: wdg_rst_n
+  wwdg:
+    module: wwdg                                            # 窗口看门狗
+    port:
+      pclk:    # APB 时钟
+        link: pclk1
+      wdg_rst_n: # 看门狗复位
+        link: wdg_rst_n
+
+  # 电源管理模块  # Power management
+  pwr:
+    module: pwr_h7                                          # 电源管理（H7）
+    port:
+      pclk:    # APB 时钟
+        link: pclk4
+      lp_rst_n: # 低功耗复位
+        link: lp_rst_n
+
+  # RTC 模块  # Real-time clock
+  rtc:
+    module: rtc_h7                                          # 实时时钟（H7）
+    port:
+      lse:     # 外部低速时钟
+        uplink: lse_in
+      lsi:     # 内部低速时钟
+        link: lsi_clk
+      lp_rst_n: # 低功耗复位
+        link: lp_rst_n
+
+net:  # 显式连接的内部网络
+  # 主时钟域  # Main clock domains
+  sysclk:  # 系统时钟（800MHz）
+    - instance: rcc
+      port: sysclk                                          # RCC 系统时钟输出
+    - instance: cpu
+      port: sysclk                                          # CPU 系统时钟
+    - instance: axi_matrix
+      port: sysclk                                          # AXI 矩阵系统时钟
+
+  # AHB 时钟域（800MHz）  # AHB clock domain
+  hclk:
+    - instance: rcc
+      port: hclk                                            # RCC AHB 时钟输出
+    - instance: cpu
+      port: hclk                                            # CPU AHB 时钟
+    - instance: ahb_bus
+      port: hclk                                            # AHB 总线时钟
+    - instance: sdmmc1
+      port: hclk                                            # SDMMC1 AHB 时钟
+    - instance: sdmmc2
+      port: hclk                                            # SDMMC2 AHB 时钟
+    - instance: usb_fs
+      port: hclk                                            # USB FS AHB 时钟
+    - instance: eth
+      port: hclk                                            # 以太网 AHB 时钟
+    - instance: dcmi
+      port: hclk                                            # 摄像头 AHB 时钟
+    - instance: fmc
+      port: hclk                                            # FMC AHB 时钟
+    - instance: itcm_sram
+      port: hclk                                            # ITCM SRAM 时钟
+    - instance: dtcm_sram
+      port: hclk                                            # DTCM SRAM 时钟
+    - instance: sram
+      port: hclk                                            # 片上 SRAM 时钟
+
+  # AXI 时钟域（800MHz）  # AXI clock domain
+  aclk:
+    - instance: rcc
+      port: aclk                                            # RCC AXI 时钟输出
+    - instance: axi_matrix
+      port: aclk                                            # AXI 互联时钟
+    - instance: qspi
+      port: aclk                                            # QSPI 时钟
+    - instance: usb_hs
+      port: aclk                                            # USB HS 时钟
+    - instance: ltdc
+      port: aclk                                            # 显示控制器时钟
+
+  # APB1 时钟域（200MHz）  # APB1 clock domain
+  pclk1:
+    - instance: rcc
+      port: pclk1                                           # RCC APB1 时钟输出
+    - instance: apb1
+      port: pclk                                            # APB1 桥时钟
+    - instance: usart2
+      port: pclk                                            # USART2 时钟
+    - instance: usart3
+      port: pclk                                            # USART3 时钟
+    - instance: uart4
+      port: pclk                                            # UART4 时钟
+    - instance: uart5
+      port: pclk                                            # UART5 时钟
+    - instance: spi2
+      port: pclk                                            # SPI2 时钟
+    - instance: spi3
+      port: pclk                                            # SPI3 时钟
+    - instance: i2c1
+      port: pclk                                            # I2C1 时钟
+    - instance: i2c2
+      port: pclk                                            # I2C2 时钟
+    - instance: i2c3
+      port: pclk                                            # I2C3 时钟
+    - instance: fdcan1
+      port: pclk                                            # FDCAN1 时钟
+    - instance: fdcan2
+      port: pclk                                            # FDCAN2 时钟
+    - instance: tim2
+      port: pclk                                            # TIM2 时钟
+    - instance: tim3
+      port: pclk                                            # TIM3 时钟
+    - instance: tim4
+      port: pclk                                            # TIM4 时钟
+    - instance: tim5
+      port: pclk                                            # TIM5 时钟
+    - instance: tim6
+      port: pclk                                            # TIM6 时钟
+    - instance: tim7
+      port: pclk                                            # TIM7 时钟
+    - instance: tim12
+      port: pclk                                            # TIM12 时钟
+    - instance: tim13
+      port: pclk                                            # TIM13 时钟
+    - instance: tim14
+      port: pclk                                            # TIM14 时钟
+
+  # APB2 时钟域（800MHz）  # APB2 clock domain
+  pclk2:
+    - instance: rcc
+      port: pclk2                                           # RCC APB2 时钟输出
+    - instance: apb2
+      port: pclk                                            # APB2 桥时钟
+    - instance: usart1
+      port: pclk                                            # USART1 时钟
+    - instance: usart6
+      port: pclk                                            # USART6 时钟
+    - instance: spi1
+      port: pclk                                            # SPI1 时钟
+    - instance: spi4
+      port: pclk                                            # SPI4 时钟
+    - instance: spi5
+      port: pclk                                            # SPI5 时钟
+    - instance: spi6
+      port: pclk                                            # SPI6 时钟
+    - instance: i2c4
+      port: pclk                                            # I2C4 时钟
+    - instance: tim1
+      port: pclk                                            # TIM1 时钟
+    - instance: tim8
+      port: pclk                                            # TIM8 时钟
+    - instance: adc1
+      port: pclk                                            # ADC1 时钟
+    - instance: adc2
+      port: pclk                                            # ADC2 时钟
+    - instance: adc3
+      port: pclk                                            # ADC3 时钟
+    - instance: dac
+      port: pclk                                            # DAC 时钟
+    - instance: sai1
+      port: pclk                                            # SAI1 时钟
+    - instance: sai2
+      port: pclk                                            # SAI2 时钟
+
+  # APB3 时钟域（400MHz）  # APB3 clock domain
+  pclk3:
+    - instance: rcc
+      port: pclk3                                           # RCC APB3 时钟输出
+    - instance: apb3
+      port: pclk                                            # APB3 桥时钟
+
+  # APB4 时钟域（400MHz）  # APB4 clock domain
+  pclk4:
+    - instance: rcc
+      port: pclk4                                           # RCC APB4 时钟输出
+    - instance: apb4
+      port: pclk                                            # APB4 桥时钟
+    - instance: gpioa
+      port: pclk                                            # GPIOA 时钟
+    - instance: gpiob
+      port: pclk                                            # GPIOB 时钟
+    - instance: gpioc
+      port: pclk                                            # GPIOC 时钟
+    - instance: gpiod
+      port: pclk                                            # GPIOD 时钟
+    - instance: gpioe
+      port: pclk                                            # GPIOE 时钟
+    - instance: gpiof
+      port: pclk                                            # GPIOF 时钟
+    - instance: gpiog
+      port: pclk                                            # GPIOG 时钟
+    - instance: gpioh
+      port: pclk                                            # GPIOH 时钟
+    - instance: gpioi
+      port: pclk                                            # GPIOI 时钟
+    - instance: gpioj
+      port: pclk                                            # GPIOJ 时钟
+    - instance: gpiok
+      port: pclk                                            # GPIOK 时钟
+
+  # USB 专用时钟（48MHz）  # USB dedicated clock
+  usbclk:
+    - instance: rcc
+      port: usbclk                                          # RCC USB 时钟输出
+    - instance: usb_fs
+      port: usbclk                                          # USB FS 时钟
+    - instance: usb_hs
+      port: usbclk                                          # USB HS 时钟
+
+  # 专用时钟域  # Specialized clock domains
+  # ADC 时钟（独立时钟域）  # ADC clock (independent clock domain)
+  adcclk:
+    - instance: rcc
+      port: adcclk                                          # RCC ADC 时钟输出
+    - instance: adc1
+      port: adcclk                                          # ADC1 时钟
+    - instance: adc2
+      port: adcclk                                          # ADC2 时钟
+    - instance: adc3
+      port: adcclk                                          # ADC3 时钟
+
+  # LTDC 像素时钟（独立时钟域）  # LTDC pixel clock (independent clock domain)
+  ltdc_clk:
+    - instance: rcc
+      port: ltdc_clk                                        # RCC LTDC 时钟输出
+    - instance: ltdc
+      port: ltdc_clk                                        # LTDC 像素时钟
+
+  # SAI 音频时钟（独立时钟域）  # SAI audio clock (independent clock domain)
+  sai1_clk:
+    - instance: rcc
+      port: sai1_clk                                        # RCC SAI1 时钟输出
+    - instance: sai1
+      port: sai1_clk                                        # SAI1 音频时钟
+  sai2_clk:
+    - instance: rcc
+      port: sai2_clk                                        # RCC SAI2 时钟输出
+    - instance: sai2
+      port: sai2_clk                                        # SAI2 音频时钟
+
+  # 以太网时钟（独立时钟域）  # Ethernet clock (independent clock domain)
+  eth_clk:
+    - instance: rcc
+      port: eth_clk                                         # RCC ETH 时钟输出
+    - instance: eth
+      port: eth_clk                                         # 以太网时钟
+
+  # 内部低速时钟（LSI，32kHz）  # Internal low speed clock (LSI, 32kHz)
+  lsi_clk:
+    - instance: rcc
+      port: lsi_clk                                         # RCC LSI 时钟输出
+    - instance: iwdg
+      port: lsi                                             # 独立看门狗时钟
+    - instance: rtc
+      port: lsi                                             # RTC 内部时钟
+
+  # 复位网络  # Reset networks
+  # 系统复位（全局复位，低有效）  # System reset (global reset, active low)
+  sys_rst_n:
+    - instance: rcc
+      port: sys_rst_n                                       # RCC 系统复位输出
+    - instance: cpu
+      port: hresetn                                         # CPU 复位
+    - instance: axi_matrix
+      port: aresetn                                         # AXI 复位
+    - instance: ahb_bus
+      port: hresetn                                         # AHB 复位
+    - instance: qspi
+      port: aresetn                                         # QSPI 复位
+    - instance: fmc
+      port: hresetn                                         # FMC 复位
+    - instance: sdmmc1
+      port: hresetn                                         # SDMMC1 复位
+    - instance: sdmmc2
+      port: hresetn                                         # SDMMC2 复位
+    - instance: usb_fs
+      port: hresetn                                         # USB FS 复位
+    - instance: usb_hs
+      port: aresetn                                         # USB HS 复位
+    - instance: eth
+      port: hresetn                                         # ETH 复位
+    - instance: ltdc
+      port: aresetn                                         # LTDC 复位
+    - instance: dcmi
+      port: hresetn                                         # DCMI 复位
+    - instance: itcm_sram
+      port: hresetn                                         # ITCM SRAM 复位
+    - instance: dtcm_sram
+      port: hresetn                                         # DTCM SRAM 复位
+    - instance: sram
+      port: hresetn                                         # 片上 SRAM 复位
+
+  # 外设复位（APB 外设复位，低有效）  # Peripheral reset (APB peripheral reset, active low)
+  periph_rst_n:
+    - instance: rcc
+      port: periph_rst_n                                    # RCC 外设复位输出
+    - instance: apb1
+      port: presetn                                         # APB1 复位
+    - instance: apb2
+      port: presetn                                         # APB2 复位
+    - instance: apb3
+      port: presetn                                         # APB3 复位
+    - instance: apb4
+      port: presetn                                         # APB4 复位
+    - instance: usart1
+      port: presetn                                         # USART1 复位
+    - instance: usart2
+      port: presetn                                         # USART2 复位
+    - instance: usart3
+      port: presetn                                         # USART3 复位
+    - instance: uart4
+      port: presetn                                         # UART4 复位
+    - instance: uart5
+      port: presetn                                         # UART5 复位
+    - instance: usart6
+      port: presetn                                         # USART6 复位
+    - instance: spi1
+      port: presetn                                         # SPI1 复位
+    - instance: spi2
+      port: presetn                                         # SPI2 复位
+    - instance: spi3
+      port: presetn                                         # SPI3 复位
+    - instance: spi4
+      port: presetn                                         # SPI4 复位
+    - instance: spi5
+      port: presetn                                         # SPI5 复位
+    - instance: spi6
+      port: presetn                                         # SPI6 复位
+    - instance: i2c1
+      port: presetn                                         # I2C1 复位
+    - instance: i2c2
+      port: presetn                                         # I2C2 复位
+    - instance: i2c3
+      port: presetn                                         # I2C3 复位
+    - instance: i2c4
+      port: presetn                                         # I2C4 复位
+    - instance: fdcan1
+      port: presetn                                         # FDCAN1 复位
+    - instance: fdcan2
+      port: presetn                                         # FDCAN2 复位
+    - instance: tim1
+      port: presetn                                         # TIM1 复位
+    - instance: tim2
+      port: presetn                                         # TIM2 复位
+    - instance: tim3
+      port: presetn                                         # TIM3 复位
+    - instance: tim4
+      port: presetn                                         # TIM4 复位
+    - instance: tim5
+      port: presetn                                         # TIM5 复位
+    - instance: tim6
+      port: presetn                                         # TIM6 复位
+    - instance: tim7
+      port: presetn                                         # TIM7 复位
+    - instance: tim8
+      port: presetn                                         # TIM8 复位
+    - instance: tim12
+      port: presetn                                         # TIM12 复位
+    - instance: tim13
+      port: presetn                                         # TIM13 复位
+    - instance: tim14
+      port: presetn                                         # TIM14 复位
+    - instance: tim15
+      port: presetn                                         # TIM15 复位
+    - instance: tim16
+      port: presetn                                         # TIM16 复位
+    - instance: tim17
+      port: presetn                                         # TIM17 复位
+    - instance: adc1
+      port: presetn                                         # ADC1 复位
+    - instance: adc2
+      port: presetn                                         # ADC2 复位
+    - instance: adc3
+      port: presetn                                         # ADC3 复位
+    - instance: dac
+      port: presetn                                         # DAC 复位
+    - instance: sai1
+      port: presetn                                         # SAI1 复位
+    - instance: sai2
+      port: presetn                                         # SAI2 复位
+    - instance: gpioa
+      port: presetn                                         # GPIOA 复位
+    - instance: gpiob
+      port: presetn                                         # GPIOB 复位
+    - instance: gpioc
+      port: presetn                                         # GPIOC 复位
+    - instance: gpiod
+      port: presetn                                         # GPIOD 复位
+    - instance: gpioe
+      port: presetn                                         # GPIOE 复位
+    - instance: gpiof
+      port: presetn                                         # GPIOF 复位
+    - instance: gpiog
+      port: presetn                                         # GPIOG 复位
+    - instance: gpioh
+      port: presetn                                         # GPIOH 复位
+    - instance: gpioi
+      port: presetn                                         # GPIOI 复位
+    - instance: gpioj
+      port: presetn                                         # GPIOJ 复位
+    - instance: gpiok
+      port: presetn                                         # GPIOK 复位
+
+  # 看门狗复位（独立复位域）  # Watchdog reset (independent reset domain)
+  wdg_rst_n:
+    - instance: rcc
+      port: wdg_rst_n                                       # RCC 看门狗复位输出
+    - instance: iwdg
+      port: wdg_rst_n                                       # 独立看门狗复位
+    - instance: wwdg
+      port: wdg_rst_n                                       # 窗口看门狗复位
+
+  # 低功耗复位（独立复位域）  # Low power reset (independent reset domain)
+  lp_rst_n:
+    - instance: rcc
+      port: lp_rst_n                                        # RCC 低功耗复位输出
+    - instance: pwr
+      port: lp_rst_n                                        # 电源管理复位
+    - instance: rtc
+      port: lp_rst_n                                        # RTC 复位
+
+bus:  # 总线连接（协议级自动展开）
+  # AXI masters/slaves  # AXI 主/从连接
+  axi_system:
+    - instance: cpu
+      port: i_code_axi                                      # CPU 指令主端口
+    - instance: cpu
+      port: d_data_axi                                      # CPU 数据主端口
+    - instance: axi_matrix
+      port: s_axi_m0                                        # AXI 矩阵主入口 0
+    - instance: axi_matrix
+      port: s_axi_m1                                        # AXI 矩阵主入口 1
+    - instance: axi_matrix
+      port: s_axi_m2                                        # AXI 矩阵主入口 2
+    - instance: axi_matrix
+      port: m_axi_s0                                        # AXI 矩阵从出口 0（到 SRAM）
+    - instance: sram
+      port: axi_s                                           # SRAM 从接口
+    - instance: axi_matrix
+      port: m_axi_s1                                        # AXI 从出口 1（到 FMC）
+    - instance: fmc
+      port: axi_s                                           # FMC 从接口
+    - instance: axi_matrix
+      port: m_axi_s2                                        # AXI 从出口 2（到 QSPI）
+    - instance: qspi
+      port: axi_s                                           # QSPI 从接口
+    - instance: axi_matrix
+      port: m_axi_s3                                        # AXI 从出口 3（到 SD/USB/ETH 等）
+    - instance: sdmmc1
+      port: axi_s                                           # SDMMC1 从接口（如内部桥接）
+    - instance: sdmmc2
+      port: axi_s                                           # SDMMC2 从接口
+    - instance: eth
+      port: axi_s                                           # ETH 从接口
+    - instance: usb_hs
+      port: axi_s                                           # USB HS 从接口
+
+  # APB domains (examples; attach peripherals according to RM)  # APB 域（示例；按参考手册分配）
+  apb_domain1:
+    - instance: apb1
+      port: apb_m                                           # APB1 主接口
+    - instance: usart2
+      port: apb_s                                           # USART2 从接口
+    - instance: usart3
+      port: apb_s                                           # USART3 从接口
+    - instance: uart4
+      port: apb_s                                           # UART4 从接口
+    - instance: uart5
+      port: apb_s                                           # UART5 从接口
+    - instance: spi2
+      port: apb_s                                           # SPI2 从接口
+    - instance: spi3
+      port: apb_s                                           # SPI3 从接口
+    - instance: i2c1
+      port: apb_s                                           # I2C1 从接口
+    - instance: i2c2
+      port: apb_s                                           # I2C2 从接口
+    - instance: i2c3
+      port: apb_s                                           # I2C3 从接口
+    - instance: fdcan1
+      port: apb_s                                           # FDCAN1 从接口
+    - instance: fdcan2
+      port: apb_s                                           # FDCAN2 从接口
+    - instance: tim2
+      port: apb_s                                           # TIM2 从接口
+    - instance: tim3
+      port: apb_s                                           # TIM3 从接口
+    - instance: tim4
+      port: apb_s                                           # TIM4 从接口
+    - instance: tim5
+      port: apb_s                                           # TIM5 从接口
+    - instance: tim6
+      port: apb_s                                           # TIM6 从接口
+    - instance: tim7
+      port: apb_s                                           # TIM7 从接口
+    - instance: tim12
+      port: apb_s                                           # TIM12 从接口
+    - instance: tim13
+      port: apb_s                                           # TIM13 从接口
+    - instance: tim14
+      port: apb_s                                           # TIM14 从接口
+
+  apb_domain2:
+    - instance: apb2
+      port: apb_m                                           # APB2 主接口
+    - instance: usart1
+      port: apb_s                                           # USART1 从接口
+    - instance: usart6
+      port: apb_s                                           # USART6 从接口
+    - instance: spi1
+      port: apb_s                                           # SPI1 从接口
+    - instance: spi4
+      port: apb_s                                           # SPI4 从接口
+    - instance: spi5
+      port: apb_s                                           # SPI5 从接口
+    - instance: spi6
+      port: apb_s                                           # SPI6 从接口
+    - instance: i2c4
+      port: apb_s                                           # I2C4 从接口
+    - instance: tim1
+      port: apb_s                                           # TIM1 从接口
+    - instance: tim8
+      port: apb_s                                           # TIM8 从接口
+    - instance: adc1
+      port: apb_s                                           # ADC1 从接口
+    - instance: adc2
+      port: apb_s                                           # ADC2 从接口
+    - instance: adc3
+      port: apb_s                                           # ADC3 从接口
+    - instance: dac
+      port: apb_s                                           # DAC 从接口
+    - instance: sai1
+      port: apb_s                                           # SAI1 从接口
+    - instance: sai2
+      port: apb_s                                           # SAI2 从接口
+
+  apb_domain3:
+    - instance: apb3
+      port: apb_m                                           # APB3 主接口（扩展用）
+
+  apb_domain4:
+    - instance: apb4
+      port: apb_m                                           # APB4 主接口
+    - instance: gpioa
+      port: apb_s                                           # GPIOA 从接口
+    - instance: gpiob
+      port: apb_s                                           # GPIOB 从接口
+    - instance: gpioc
+      port: apb_s                                           # GPIOC 从接口
+    - instance: gpiod
+      port: apb_s                                           # GPIOD 从接口
+    - instance: gpioe
+      port: apb_s                                           # GPIOE 从接口
+    - instance: gpiof
+      port: apb_s                                           # GPIOF 从接口
+    - instance: gpiog
+      port: apb_s                                           # GPIOG 从接口
+    - instance: gpioh
+      port: apb_s                                           # GPIOH 从接口
+    - instance: gpioi
+      port: apb_s                                           # GPIOI 从接口
+    - instance: gpioj
+      port: apb_s                                           # GPIOJ 从接口
+    - instance: gpiok
+      port: apb_s                                           # GPIOK 从接口
